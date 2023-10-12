@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>CHBDC Complex Sites</title>
+    <meta name="viewport" content="width=device-width">
+    <script src='https://api.mapbox.com/mapbox-gl-js/v3.0.0-beta.1/mapbox-gl.js'></script>
+    <link href='https://api.mapbox.com/mapbox-gl-js/v3.0.0-beta.1/mapbox-gl.css' rel='stylesheet' />
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha384-DfXdz2htPH0lsSSs5nCTpuj/zy4C+OGpamoFVy38MVBnE+IbbVYUew+OrCXaRkfj" crossorigin="anonymous"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js" integrity="sha384-geWF76RCwLtnZ8qwWowPQNguL3RmwHVBC9FhGdlKrxdiJJigb/j/68SIy3Te4Bkz" crossorigin="anonymous"></script>
+    <style>
+    .roadInfo {
+        position: absolute;
+        top: 50%;
+        right: 15px;
+        font-family: sans-serif;
+        margin-top: 5px;
+        margin-left: 5px;
+        padding: 5px;
+        border: 2px solid black;
+        font-size: 12px;
+        color: #222;
+        background-color: #fff;
+        border-radius: 6px;
+        min-width: 300px;
+    }
+
+    body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+    }
+
+    hr {
+        margin-top: 4px;
+        margin-bottom: 2px;
+    }
+
+    .filters {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 250px;
+        background-color: rgba(37, 47, 53, 0.9);
+        padding-top: 65px;
+        padding-left: 10px;
+        overflow-x: hidden;
+        color: white;
+    }
+
+    #map {
+        position: absolute;
+        top: 0%;
+        bottom: 0%;
+        width: 100%;
+    }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar fixed-top navbar-dark bg-dark" style="padding-left: 1rem; padding-right: 1rem">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1"><img src="https://www.chbdc.govt.nz/themes/mmenu2017/images/logo.png" height=35 style="margin-right: 1rem; " />CHBDC Complex Sites</span><span class='pull-right'><img src="https://www.stantec.com/content/dam/stantec/images/logos/logo-white.svg" height=25 /></span>
+        </div>
+    </nav>
+    <div id="map" style="margin-top: 51px">
+    </div>
+    <div class='filters'>
+        <h5>Base Map</h5>
+        <div id="basemap">
+            <select class="form-select form-select-sm" aria-label=".form-select-sm" style="width: 85%; padding-top: 2px; padding-bottom: 2px">
+                <option selected value="mapbox://styles/mapbox/satellite-streets-v12">Satellite Streets</option>
+                <option value="mapbox://styles/mapbox/streets-v12">Streets</option>
+                <option value="mapbox://styles/mapbox/light-v11">Light</option>
+                <option value="mapbox://styles/mapbox/dark-v11">Dark</option>
+                <option value="mapbox://styles/mapbox/outdoors-v12">Outdoors</option>
+                <option value="mapbox://styles/mapbox/satellite-v9">Satellite</option>
+            </select>
+        </div>
+        <hr />
+        <h5>Assets</h5>
+        <div id="assets">
+        </div>
+        <hr />
+        <h5>Stages</h5>
+        <div id="stages">
+        </div>
+        <hr />
+        <h5>Phases</h5>
+        <div id="phases">
+        </div>
+        <hr />
+        <h5>Wards</h5>
+        <div id="wards">
+        </div>
+        <hr />
+    </div>
+    <div class='roadInfo'>
+        <div id='info'></div>
+    </div>
+    <script>
+    mapboxgl.accessToken = 'pk.eyJ1IjoicGV0ZWhpbGxqbnIiLCJhIjoiY2swcjZtd3IxMDJjOTNjb3c1Z25wczQ3NyJ9.2Ut4kmGeVuvc7UUb-qezNw';
+
+    const assets = ["rock", "landslide", "road", "bridge_n"];
+    const assetLabs = ["Rock Armouring", "Landslides", "Roads", "Bridges"];
+    const stages = ["completed", "programmed", "notprogrammed"];
+    const stageLabs = ["Completed", "Programmed", "Not Programmed"];
+    const phases = ["Response", "Recovery"]
+    const wards = ["Elsthorpe", "Porangahau", "Wallingford_Flemington", "Otane", "Omakere", "Waipukurau", "Tikokino", "Ongaonga", "Takapau", "Waipawa", "Blackhead", "Hatuma"];
+    const wardColors = ["#1F77B4", "#FF7F0E","#2CA02C","#D62728", "#9467BD","#8C564B", "#E377C2", "#7F7F7F", "#BCBD22", "#17BECF", "#AEC7E8", "white"];
+
+    let hoveredSite = null;
+
+    $('.roadInfo').css('display', 'none')
+    const map = new mapboxgl.Map({
+        container: 'map', // container ID
+        style: 'mapbox://styles/mapbox/satellite-streets-v12', // style URL
+        zoom: 9.32, // starting zoom
+        pitch: 0,
+        bearing: 0,
+        center: [176.64153018, -40.0676103] // starting center
+    });
+
+    map.addControl(new mapboxgl.ScaleControl());
+    map.addControl(new mapboxgl.NavigationControl());
+    /*
+        assets.forEach(t => {
+            map.loadImage(`https://raw.githubusercontent.com/petehilljnr/complex-sites/main/png/${t}.png`, (error, image) => {
+                console.log(t)
+                if (error) throw error;
+                map.addImage(t, image, false);
+            });
+        });
+    */
+    const updateLayerFilter = () => {
+        // get an array of icon names that corresponds to the currently checked checkboxes
+        let assets_on = [];
+        let stages_on = [];
+        let phases_on = [];
+        let wards_on = [];
+
+        assets.forEach(a => {
+            if ($('#' + a).prop('checked')) { assets_on.push(a) }
+        });
+
+        stages.forEach((a, i) => {
+            if ($('#' + a).prop('checked')) { stages_on.push(stageLabs[i]) }
+        });
+
+        phases.forEach(a => {
+            if ($('#' + a).prop('checked')) { phases_on.push(a) }
+        });
+
+        wards.forEach(a => {
+            if ($('#' + a).prop('checked')) { wards_on.push(a) }
+        });
+
+        const mapFilter = [
+            "all",
+            ["in", "image", ...assets_on],
+            ["in", "stage", ...stages_on],
+            ["in", "phase", ...phases_on],
+            ["in", "ward", ...wards_on]
+        ];
+
+        map.setFilter('markers-layer', mapFilter);
+
+        map.setFilter('wards-layer', ["all", ["in", "ward", ...wards_on]]);
+
+    };
+
+    function addAllLayers() {
+        assets.forEach(t => {
+            map.loadImage(`https://raw.githubusercontent.com/petehilljnr/complex-sites/main/png/${t}.png`, (error, image) => {
+                console.log(t)
+                if (error) throw error;
+                map.addImage(t, image, false);
+            });
+        });
+        map.addSource('mapbox-dem', {
+            'type': 'raster-dem',
+            'url': 'mapbox://mapbox.mapbox-terrain-dem-v1',
+            'tileSize': 512,
+            'maxzoom': 14
+        });
+        // add the DEM source as a terrain layer with exaggerated height
+        map.setTerrain({ 'source': 'mapbox-dem', 'exaggeration': 1.5 });
+        map.addSource('sites', {
+            type: 'geojson',
+            data: 'https://raw.githubusercontent.com/petehilljnr/complex-sites/main/geojson/complex.geojson',
+            'generateId': true
+        });
+
+        map.addLayer({
+            'id': 'markers-layer',
+            'slot': 'top',
+            'source': 'sites',
+            'type': 'symbol',
+            'layout': {
+                'icon-image': ['get', 'image'],
+                "icon-size": ['interpolate', ['linear'],
+                    ['zoom'], 10, 0.1, 15, 0.18
+                ],
+                'icon-allow-overlap': true
+            }
+        });
+
+
+        map.addSource('wards', {
+            type: 'geojson',
+            data: 'https://raw.githubusercontent.com/petehilljnr/complex-sites/main/geojson/wards.geojson',
+            'generateId': true
+        });
+
+        map.addLayer({
+            'id': 'wards-layer',
+            'slot': 'top',
+            'source': 'wards',
+            'type': 'fill',
+            'paint': {
+                'fill-color': [
+                    'match', ['get', 'ward'],
+                    "Elsthorpe", "#1F77B4",
+                    "Porangahau", "#FF7F0E",
+                    "Wallingford_Flemington", "#2CA02C",
+                    "Omakere", "#D62728",
+                    "Otane", "#9467BD",
+                    "Waipukurau", "#8C564B",
+                    "Tikokino", "#E377C2",
+                    "Ongaonga", "#7F7F7F",
+                    "Takapau", "#BCBD22",
+                    "Waipawa", "#17BECF",
+                    "Blackhead", "#AEC7E8",
+                    "Hatuma","white",
+                    'white' // otherwise
+                ],
+                'fill-opacity': 0.4
+            }
+        });
+
+
+        map.on('mousemove', 'markers-layer', (e) => {
+            if (e.features.length > 0) {
+                if (hoveredSite !== null) {
+                    map.setFeatureState({ source: 'sites', id: hoveredSite }, { hover: false });
+                }
+
+                hoveredSite = e.features[0].id;
+
+                const initialInfo =
+                    `
+                    <span style="font-size: 16px"><strong>${e.features[0].properties.asset}</strong></span></br>
+                    <span style="font-size: 16px"><strong>${e.features[0].properties.road_name}</strong> ${' ' + Math.round(e.features[0].properties.rp)}m </span></br>
+                    <span style="font-size: 16px"><strong>${e.features[0].properties.site}</strong></span></br>
+                    <span style="font-size: 14px"><strong>Ward:</strong>${' ' + e.features[0].properties.ward}</span></br>
+                    <span style="font-size: 14px"><strong>Phase:</strong>${' ' + e.features[0].properties.phase}</span></br>
+                    <span style="font-size: 14px"><strong>Stage:</strong>${' ' + e.features[0].properties.stage}</span></br>                    
+                    `;
+
+                $("#info").html(initialInfo);
+
+                $('.roadInfo').css('display', 'block')
+
+                map.setFeatureState({ source: 'sites', id: hoveredSite }, { hover: true });
+            }
+        });
+
+        // When the mouse leaves the state-fill layer, update the feature state of the
+        // previously hovered feature.
+        map.on('mouseleave', 'markers-layer', () => {
+            if (hoveredSite !== null) {
+                map.setFeatureState({ source: 'sites', id: hoveredSite }, { hover: false });
+            }
+            $('.roadInfo').css('display', 'none')
+            hoveredSite = null;
+        });
+    }
+
+    map.on('load', function() {
+
+        addAllLayers();
+
+        function switchLayer(layer) {
+            // addMaineLayer fn will be called once on layer switched
+            map.once("styledata", addAllLayers);
+            map.setStyle(layer);
+        }
+
+        $('#basemap').change(function() {
+            switchLayer($('#basemap option:selected').val())
+        });
+
+    });
+
+
+
+    assets.forEach((asset, i) => {
+        $("#assets").append(`
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="${asset}" checked onchange="updateLayerFilter()">
+            <div><img src="https://raw.githubusercontent.com/petehilljnr/complex-sites/main/png/${asset}.png" height=20 style="margin-right: 5px"/><span>${assetLabs[i]}</span></div>
+        </div>`)
+    });
+
+    stages.forEach((stage, i) => {
+        $("#stages").append(`
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="${stage}" checked onchange="updateLayerFilter()">
+            <div><span>${stageLabs[i]}</span></div>
+        </div>`)
+    });
+
+    phases.forEach((phase, i) => {
+        $("#phases").append(`
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="${phase}" checked onchange="updateLayerFilter()">
+            <div><span>${phase}</span></div>
+        </div>`)
+    });
+
+    wards.forEach((ward, i) => {
+        $("#wards").append(`
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" role="switch" id="${ward}" checked onchange="updateLayerFilter()">
+            <div><svg width="10" height="10"><rect width="10" height="10" style="fill:${wardColors[i]}" /></svg><span>${'   '+ ward}</span></div>
+        </div>`)
+    });
+    </script>
+</body>
+
+</html>
